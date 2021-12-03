@@ -69,34 +69,25 @@ int main(int argc, char *argv[])
     MPI_Scatterv(&fullVec[0], &send_counts[0], &displs[0], MPI_INT, &smallVec[0], (chunkSize + lasting), MPI_INT, 0, MPI_COMM_WORLD);
     mergeSort(smallVec);
 
-    
-    /*if (rank == 0)
-    {
-        int length = fullVec.size();
-        fullVec.clear();
-        fullVec.reserve(length);
-    }*/
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
     // merging subroutine + print of final result;
     if (rank == 0)
     {
-        std::cout<<std::endl;
         std::vector<int> src1, src2, dst;
-        int i = 0;
-
         /**
          * I need to give to the merge function also the index of the last element of the array in order to perform correctly a merge.
          * I cannot insert it before because that would cause problems with scatter and gather 
         **/
         displs.push_back(fullVec.size());
-        std::cout<<"displs size: "<<displs.size()<<std::endl;
+
         while (displs.size() > 2)
         {   
-            std::cout<<"Merging from "<<displs[i]<<" to "<<displs[i+2]<<" middle point "<<displs[i+1]<<std::endl;
-            src1 = {fullVec.begin() + displs[i], fullVec.begin() + displs[i + 1]};
-            src2 = {fullVec.begin() + displs[i + 1], fullVec.begin() + displs[i + 2]};
+            std::cout<<"Merging from "<<displs[0]<<" to "<<displs[2]<<": ";
+            std::cout<<displs[1] - displs[0] <<" first slot and "<<displs[2] - displs[1] <<" second slot"<<std::endl;
+            src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
+            src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
 
             dst.reserve(src1.size() + src2.size());
             merge(src1, src2, dst);
