@@ -69,13 +69,14 @@ int main(int argc, char *argv[])
     MPI_Scatterv(&fullVec[0], &send_counts[0], &displs[0], MPI_INT, &smallVec[0], (chunkSize + lasting), MPI_INT, 0, MPI_COMM_WORLD);
     mergeSort(smallVec);
 
+    std::cout<<"process "<<rank<<" completed";
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
     // merging subroutine + print of final result;
     if (rank == 0)
     {
-        std::vector<int> src1, src2, dst;
+        std::vector<int> src1, src2;
         /**
          * I need to give to the merge function also the index of the last element of the array in order to perform correctly a merge.
          * I cannot insert it before because that would cause problems with scatter and gather 
@@ -89,12 +90,8 @@ int main(int argc, char *argv[])
             src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
             src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
 
-            dst.reserve(src1.size() + src2.size());
-            merge(src1, src2, dst);
-            std::copy(std::begin(dst), std::end(dst), fullVec.begin());
+            merge(src1, src2, fullVec);
 
-            dst.clear();
-            dst.shrink_to_fit();
             displs.erase(displs.begin() + 1);
         }
 
