@@ -43,6 +43,8 @@ int main(int argc, char *argv[])
             break;
         }
 
+        initTime = MPI_Wtime();
+
         chunkSize = fullVec.size() / size;
         lasting = fullVec.size() % size;
 
@@ -57,8 +59,6 @@ int main(int argc, char *argv[])
             send_counts.push_back(chunkSize);
         }
         send_counts[size - 1] += lasting;
-
-        initTime = MPI_Wtime();
     }
 
     // BroadCasting chunksize and lasting-elements
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
         }
 
         std::cout << "Global vector check returned " << result << std::endl;
-        std::cout << "Total time for merging: " << (endTime - initTime) * 1000 << " millisecs" << std::endl;
+        std::cout << "Total time for merging: " << (endTime - initTime) * 1000000 << " microsecs" << std::endl;
     }
 
     MPI_Finalize();

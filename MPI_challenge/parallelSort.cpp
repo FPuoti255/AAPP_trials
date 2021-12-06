@@ -15,6 +15,8 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    double initTime, endTime;
+
     std::vector<int> fullVec, smallVec;
     unsigned int chunkSize;
     unsigned int lasting = 0;
@@ -39,6 +41,8 @@ int main(int argc, char *argv[])
         default:
             break;
         }
+
+        initTime = MPI_Wtime();
 
         chunkSize = fullVec.size() / size;
         lasting = fullVec.size() % size;
@@ -69,7 +73,7 @@ int main(int argc, char *argv[])
     MPI_Scatterv(&fullVec[0], &send_counts[0], &displs[0], MPI_INT, &smallVec[0], (chunkSize + lasting), MPI_INT, 0, MPI_COMM_WORLD);
     mergeSort(smallVec);
 
-    std::cout<<"process "<<rank<<" completed";
+    std::cout << "process " << rank << " completed";
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -79,14 +83,14 @@ int main(int argc, char *argv[])
         std::vector<int> src1, src2;
         /**
          * I need to give to the merge function also the index of the last element of the array in order to perform correctly a merge.
-         * I cannot insert it before because that would cause problems with scatter and gather 
-        **/
+         * I cannot insert it before because that would cause problems with scatter and gather
+         **/
         displs.push_back(fullVec.size());
 
         while (displs.size() > 2)
-        {   
-            std::cout<<"Merging from "<<displs[0]<<" to "<<displs[2]<<": ";
-            std::cout<<displs[1] - displs[0] <<" first slot and "<<displs[2] - displs[1] <<" second slot"<<std::endl;
+        {
+            std::cout << "Merging from " << displs[0] << " to " << displs[2] << ": ";
+            std::cout << displs[1] - displs[0] << " first slot and " << displs[2] - displs[1] << " second slot" << std::endl;
             src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
             src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
 
@@ -94,6 +98,8 @@ int main(int argc, char *argv[])
 
             displs.erase(displs.begin() + 1);
         }
+
+        endTime = MPI_Wtime();
 
         bool result = false;
         switch (whichType)
@@ -110,7 +116,8 @@ int main(int argc, char *argv[])
         default:
             break;
         }
-        std::cout << "Global vector check returned "<<result<<std::endl;
+        std::cout << "Global vector check returned " << result << std::endl;
+        std::cout << "Total time for merging: " << (endTime - initTime) * 1000000 << " microsecs" << std::endl;
     }
 
     MPI_Finalize();
