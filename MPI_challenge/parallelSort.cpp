@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    double initTime, endTime;
+    double initTime, totalTime = 0.0;
 
     std::vector<int> fullVec, smallVec;
     unsigned int chunkSize;
@@ -41,6 +41,8 @@ int main(int argc, char *argv[])
         default:
             break;
         }
+
+        std::cout << "_____________MPI SORTING PHASE______________" << std::endl;
 
         initTime = MPI_Wtime();
 
@@ -73,11 +75,24 @@ int main(int argc, char *argv[])
     MPI_Scatterv(&fullVec[0], &send_counts[0], &displs[0], MPI_INT, &smallVec[0], (chunkSize + lasting), MPI_INT, 0, MPI_COMM_WORLD);
     mergeSort(smallVec);
 
-    std::cout << "process " << rank << " completed";
-
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
-    // merging subroutine + print of final result;
+    if (rank == 0)
+    {
+        totalTime += MPI_Wtime() - initTime;
+
+        for (int i = 0; i < send_counts.size(); i++)
+            std::cout << "Process " << i << " sorted " << (double)send_counts[i] * 100.0 / (double)fullVec.size() << "\% of the array." << std::endl;
+
+        std::cout << std::endl
+                  << "_____________MPI MERGING PHASE______________" << std::endl<<"The main process will do all the work"<<std::endl;
+
+        initTime = MPI_Wtime();
+    }
+
+    /*************************************************************************************************************************************/
+    /******************************* Merging-subroutine + print of final result **********************************************************/
+
     if (rank == 0)
     {
         std::vector<int> src1, src2;
@@ -89,8 +104,6 @@ int main(int argc, char *argv[])
 
         while (displs.size() > 2)
         {
-            std::cout << "Merging from " << displs[0] << " to " << displs[2] << ": ";
-            std::cout << displs[1] - displs[0] << " first slot and " << displs[2] - displs[1] << " second slot" << std::endl;
             src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
             src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
 
@@ -99,7 +112,7 @@ int main(int argc, char *argv[])
             displs.erase(displs.begin() + 1);
         }
 
-        endTime = MPI_Wtime();
+        totalTime += MPI_Wtime() - initTime;
 
         bool result = false;
         switch (whichType)
@@ -116,8 +129,8 @@ int main(int argc, char *argv[])
         default:
             break;
         }
-        std::cout << "Global vector check returned " << result << std::endl;
-        std::cout << "Total time for merging: " << (endTime - initTime) * 1000000 << " microsecs" << std::endl;
+        std::cout << std::endl<<"Global vector check returned " << result << std::endl;
+        std::cout << "Total time for the algorithm: " << totalTime * 1000000 << " microsecs" << std::endl;
     }
 
     MPI_Finalize();
