@@ -18,8 +18,8 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     std::vector<int> fullVec, smallVec;
-    unsigned int chunkSize;
-    unsigned int lasting = 0;
+    int chunkSize;
+    int lasting = 0;
     std::vector<int> displs;
     std::vector<int> send_counts;
 
@@ -62,8 +62,8 @@ int main(int argc, char *argv[])
     }
 
     // BroadCasting chunksize and lasting-elements
-    MPI_Bcast(&chunkSize, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&lasting, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&chunkSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&lasting, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (rank == size - 1)
         chunkSize += lasting;
@@ -83,134 +83,122 @@ int main(int argc, char *argv[])
 
     if (rank == 0)
     {
+        for (int i = 1; i < displs.size(); i++)
+            displs.erase(displs.begin() + i);
 
-        mergesNumber = displs.size() / 2;
+        mergesNumber = displs.size();
 
-        /** I need to give to the merge function also the index of the last element of the array in order to perform correctly a merge.
-         ** I cannot insert it before because that would cause problems with scatter and gather **/
-        displs.push_back(fullVec.size());
-
-        std::cout << "mergesNumber initial: " << mergesNumber << std::endl;
+        if (displs.back() != fullVec.size())
+            /** I need to give to the merge function also the index of the last element of the array in order to properly compute
+             * how many elements each process must go through. **/
+            displs.push_back(fullVec.size());
     }
 
     MPI_Bcast(&mergesNumber, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    /** If the number of merges to perform is smaller than 2, the only main process suffices, all the others can return;
+    /** If the number of merges to perform is smaller than 2, the only main-process suffices, all the others can return;
      *  If the number of merges requires more processes,  all those exceding the number can return; **/
     if ((mergesNumber < 2 && rank != 0) || (rank > mergesNumber - 1))
     {
-        std::cout << "process " << rank << " exiting.." << std::endl;
         MPI_Finalize();
         return 0;
     }
 
-    std::vector<int> newDispls;
-    std::vector<int> newSend_counts;
-
     std::vector<int> src1, src2;
-
-    newSend_counts.reserve(mergesNumber);
-    int toAddIfNotEven = 0;
 
     while (mergesNumber >= 2)
     {
 
         if (rank == 0) // Computing the dataStructures needed for the scattering
         {
-            newDispls.clear();
-            newSend_counts.clear();
 
-            for (int i = 0; i < displs.size(); i += 2)
-                newDispls.push_back(displs[i]);
+            send_counts.clear();
 
-            for (int i = 0; i < newDispls.size() - 1; i++)
-                newSend_counts.push_back(newDispls[i + 1] - newDispls[i]);
+            for (int i = 0; i < displs.size() - 1; i++)
+                send_counts.push_back(displs[i + 1] - displs[i]);
 
-            chunkSize = newSend_counts[0];
-            lasting = newSend_counts.back() - chunkSize;
+            chunkSize = send_counts[0];
 
-            if (newDispls.back() == fullVec.size())
-                newDispls.pop_back();
-            if (fullVec.size() - newDispls.back() < chunkSize)
-            {
-                toAddIfNotEven = newDispls.back();
-                newDispls.pop_back();
-            }
+            lasting = send_counts.back() - chunkSize;
 
-            std::cout << "lasting: " << lasting << std::endl;
-            for (int i = newSend_counts.size(); i < size; i++)
-                newSend_counts.push_back(0); // you have to continue the counts otherwise the gather does not end;
+            // I've to remove the last element (which is the fullVec.size(), otherwise the scatter and gather would not work)
+            displs.pop_back();
+
+            for (int i = send_counts.size(); i < size; i++)
+                /** we have to specify for all the processes in the COMM_WORLD what the scatter and the gather will expect.
+                 * For those already returned, it will be simply zero.*/
+                send_counts.push_back(0);
         }
 
         // updating chunksize
-        MPI_Bcast(&chunkSize, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-        MPI_Bcast(&lasting, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&chunkSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&lasting, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
         if (rank == mergesNumber - 1)
             chunkSize += lasting;
 
         smallVec.resize(chunkSize);
 
-        if (rank == 0)
-        {
+        MPI_Scatterv(&fullVec[0], &send_counts[0], &displs[0], MPI_INT, &smallVec[0], chunkSize, MPI_INT, 0, MPI_COMM_WORLD);
 
-            std::cout << "Scattering newDispls: ";
-            for (int i = 0; i < newDispls.size(); i++)
-            {
-                std::cout << newDispls[i] << " ";
-            }
-            std::cout << "and newSend_counts: ";
-            for (int i = 0; i < newSend_counts.size(); i++)
-            {
-                std::cout << newSend_counts[i] << " ";
-            }
-
-            std::cout << std::endl;
-        }
-
-        MPI_Scatterv(&fullVec[0], &newSend_counts[0], &newDispls[0], MPI_INT, &smallVec[0], chunkSize, MPI_INT, 0, MPI_COMM_WORLD);
         if (lasting == 0 || rank != mergesNumber - 1)
         {
             src1 = {smallVec.begin(), smallVec.begin() + smallVec.size() / 2};
             src2 = {smallVec.begin() + smallVec.size() / 2, smallVec.end()};
+            merge(src1, src2, smallVec);
         }
-        else
+        else // case of vector length or numer of chunks non dividible by 2
         {
-
-            src1 = {smallVec.begin(), smallVec.begin() + ((smallVec.size() - lasting) / 2)};
-            src2 = {smallVec.begin() + ((smallVec.size() - lasting) / 2), smallVec.end()};
+            if (lasting > 0)
+            {
+                src1 = {smallVec.begin(), smallVec.begin() + (chunkSize - lasting) / 2};
+                src2 = {smallVec.begin() + (chunkSize - lasting) / 2, smallVec.end()};
+                merge(src1, src2, smallVec);
+            }
+            /**
+             * if lastin<0 means that we have an odd number of merges to perform and thus the last chunk, which would be smaller than
+             * the others, has been already ordered in the previous phase. It would be the main-process in the last phase to
+             * merge it with the other chunks.**/
         }
 
-        merge(src1, src2, smallVec);
+        MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
-        MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &newSend_counts[0], &newDispls[0], MPI_INT, 0, MPI_COMM_WORLD);
-
+        // now a merge has been performed, process with rank zero must prepare the data structures for the next iteration
         if (rank == 0)
         {
-            displs = {newDispls.begin(), newDispls.end()};
 
-            mergesNumber = displs.size() / 2;
-            std::cout << "new merges number: " << mergesNumber << std::endl;
+            for (int i = 1; i < displs.size(); i++)
+                displs.erase(displs.begin() + i);
 
-            for (int i = 0; i < displs.size(); i++)
-                std::cout << displs[i] << " ";
+            mergesNumber = displs.size();
+
+            if (displs.back() != fullVec.size())
+                /** I need to give to the merge function also the index of the last element of the array in order to properly compute
+                 * how many elements each process must go through. **/
+                displs.push_back(fullVec.size());
         }
 
         MPI_Bcast(&mergesNumber, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (rank > mergesNumber - 1)
+            break;
     }
 
-    // Last merge of the remainders (either two or three)parts
+    // Last merge of the remainders (either two or three) parts
     if (rank == 0)
     {
-        if (toAddIfNotEven != 0)
-            displs.push_back(toAddIfNotEven);
 
         if (displs.back() != fullVec.size())
             displs.push_back(fullVec.size());
 
+        if (displs.size() == 2)
+        {
+            displs.back() = (displs.back() - lasting) / 2;
+            displs.push_back(fullVec.size());
+        }
+
         while (displs.size() > 2)
         {
-            std::cout << "Merging from " << displs[0] << " to " << displs[2] << std::endl;
 
             src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
             src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
@@ -241,7 +229,6 @@ int main(int argc, char *argv[])
         std::cout << "Total time for merging: " << (endTime - initTime) * 1000 << " millisecs" << std::endl;
     }
 
-    // std::cout << "process " << rank << " exiting.." << std::endl;
     MPI_Finalize();
     return 0;
 }
