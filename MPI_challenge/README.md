@@ -3,6 +3,8 @@
      mpicxx parallelSortMerge.cpp (or parallelSort.cpp) helpers.cpp -o mpi_mergesort  
      mpicxx parallelSort.cpp helpers.cpp -o mpi_sort  
 
+Optionally, adding -D debug will enable the statistics prints
+
 
 ### Executed with :
     mpiexec -np ${num_processes} ./mpi_mergesort ${vector_length} 

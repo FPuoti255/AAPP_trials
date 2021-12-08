@@ -4,6 +4,7 @@
 #include <math.h>
 #include <algorithm>
 
+
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -43,8 +44,6 @@ int main(int argc, char *argv[])
             break;
         }
 
-        std::cout<<"_____________MPI SORTING PHASE______________"<<std::endl;
-
         initTime = MPI_Wtime();
 
         chunkSize = fullVec.size() / size;
@@ -78,18 +77,22 @@ int main(int argc, char *argv[])
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
+#ifdef debug
     if (rank == 0)
     {
         totalTime += MPI_Wtime() - initTime;
 
+        std::cout << "_____________MPI SORTING PHASE______________" << std::endl;
+
         for (int i = 0; i < send_counts.size(); i++)
             std::cout << "Process " << i << " sorted " << (double)send_counts[i] * 100.0 / (double)fullVec.size() << "\% of the array." << std::endl;
 
-        std::cout<<std::endl<<"_____________MPI MERGING PHASE______________"<<std::endl;
+        std::cout << std::endl
+                  << "_____________MPI MERGING PHASE______________" << std::endl;
 
         initTime = MPI_Wtime();
     }
-
+#endif
     /*************************************************************************************************************************************/
     /******************************* Merging-subroutine + print of final result **********************************************************/
 
@@ -179,7 +182,7 @@ int main(int argc, char *argv[])
 
         if (rank == 0)
         {
-
+#ifdef debug
             // measurements part
             totalTime += MPI_Wtime() - initTime;
 
@@ -190,6 +193,7 @@ int main(int argc, char *argv[])
                     std::cout << "Process " << i << " not active anymore." << std::endl;
 
             initTime = MPI_Wtime();
+#endif
 
             // now process with rank zero must prepare the data structures for the next (eventual) iteration
             for (int i = 1; i < displs.size(); i++)
@@ -222,14 +226,16 @@ int main(int argc, char *argv[])
             displs.push_back(fullVec.size());
         }
 
-        std::cout << "Final merging: ";
         while (displs.size() > 2)
         {
-            //measurements part
+// measurements part
+#ifdef debug
+            std::cout << "Final merging: ";
             totalTime += MPI_Wtime() - initTime;
             std::cout << "From " << displs[0] << " to " << displs[2] << " middle-point: " << displs[1]
-                      << " => " << (double)(displs[2] - displs[0]) * 100.0 / (double)fullVec.size() << "\% of the array."<<std::endl;
-            initTime=MPI_Wtime();
+                      << " => " << (double)(displs[2] - displs[0]) * 100.0 / (double)fullVec.size() << "\% of the array." << std::endl;
+            initTime = MPI_Wtime();
+#endif
 
             src1 = {fullVec.begin() + displs[0], fullVec.begin() + displs[1]};
             src2 = {fullVec.begin() + displs[1], fullVec.begin() + displs[2]};
@@ -257,7 +263,8 @@ int main(int argc, char *argv[])
             break;
         }
 
-        std::cout << std::endl<<"Global vector check returned " << result << std::endl;
+        std::cout << std::endl
+                  << "Global vector check returned " << result << std::endl;
         std::cout << "Total time for the algorithm: " << totalTime * 1000000 << " microsecs" << std::endl;
     }
 

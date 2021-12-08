@@ -42,8 +42,6 @@ int main(int argc, char *argv[])
             break;
         }
 
-        std::cout << "_____________MPI SORTING PHASE______________" << std::endl;
-
         initTime = MPI_Wtime();
 
         chunkSize = fullVec.size() / size;
@@ -77,19 +75,24 @@ int main(int argc, char *argv[])
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
+#ifdef debug
     if (rank == 0)
     {
+
+        std::cout << "_____________MPI SORTING PHASE______________" << std::endl;
+
         totalTime += MPI_Wtime() - initTime;
 
         for (int i = 0; i < send_counts.size(); i++)
             std::cout << "Process " << i << " sorted " << (double)send_counts[i] * 100.0 / (double)fullVec.size() << "\% of the array." << std::endl;
 
         std::cout << std::endl
-                  << "_____________MPI MERGING PHASE______________" << std::endl<<"The main process will do all the work"<<std::endl;
+                  << "_____________MPI MERGING PHASE______________" << std::endl
+                  << "The main process will do all the work" << std::endl;
 
         initTime = MPI_Wtime();
     }
-
+#endif
     /*************************************************************************************************************************************/
     /******************************* Merging-subroutine + print of final result **********************************************************/
 
@@ -129,7 +132,8 @@ int main(int argc, char *argv[])
         default:
             break;
         }
-        std::cout << std::endl<<"Global vector check returned " << result << std::endl;
+        std::cout << std::endl
+                  << "Global vector check returned " << result << std::endl;
         std::cout << "Total time for the algorithm: " << totalTime * 1000000 << " microsecs" << std::endl;
     }
 
