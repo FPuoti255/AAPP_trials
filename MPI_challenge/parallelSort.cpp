@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
-#ifdef debug
+#ifdef printWorkloads
     if (rank == 0)
     {
 

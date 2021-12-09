@@ -4,7 +4,6 @@
 #include <math.h>
 #include <algorithm>
 
-
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -77,7 +76,7 @@ int main(int argc, char *argv[])
 
     MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
-#ifdef debug
+#ifdef printWorkloads
     if (rank == 0)
     {
         totalTime += MPI_Wtime() - initTime;
@@ -97,7 +96,10 @@ int main(int argc, char *argv[])
     /******************************* Merging-subroutine + print of final result **********************************************************/
 
     int mergesNumber;
-
+    /**
+     * This variable is used in the case of an odd number of chunk to merge. 
+     * In some cases, it is necessary that the last chunk is left at the main process during the final merge **/
+    int middlePointIfOdd; 
     if (rank == 0)
     {
         for (int i = 1; i < displs.size(); i++)
@@ -109,6 +111,9 @@ int main(int argc, char *argv[])
             /** I need to give to the merge function also the index of the last element of the array in order to properly compute
              * how many elements each process must go through. **/
             displs.push_back(fullVec.size());
+
+        if((displs.back() - displs.at(displs.size()-2)) < (displs[1]-displs[0]))
+            middlePointIfOdd = displs.at(displs.size()-2);
     }
 
     MPI_Bcast(&mergesNumber, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -173,16 +178,16 @@ int main(int argc, char *argv[])
                 merge(src1, src2, smallVec);
             }
             /**
-             * if lastin<0 means that we have an odd number of merges to perform and thus the last chunk, which would be smaller than
+             * if lasting < 0 means that we have an odd number of merges to perform and thus the last chunk, which would be smaller than
              * the others, has been already ordered in the previous phase. It would be the main-process in the last phase to
-             * merge it with the other chunks.**/
+             * merge it with the other chunks using the "middle point" previously saved in the variable middlePointIfOdd.**/
         }
 
         MPI_Gatherv(&smallVec[0], chunkSize, MPI_INT, &fullVec[0], &send_counts[0], &displs[0], MPI_INT, 0, MPI_COMM_WORLD);
 
         if (rank == 0)
         {
-#ifdef debug
+#ifdef printWorkloads
             // measurements part
             totalTime += MPI_Wtime() - initTime;
 
@@ -198,7 +203,6 @@ int main(int argc, char *argv[])
             // now process with rank zero must prepare the data structures for the next (eventual) iteration
             for (int i = 1; i < displs.size(); i++)
                 displs.erase(displs.begin() + i);
-
             mergesNumber = displs.size();
 
             if (displs.back() != fullVec.size())
@@ -217,19 +221,22 @@ int main(int argc, char *argv[])
     if (rank == 0)
     {
 
-        if (displs.back() != fullVec.size())
-            displs.push_back(fullVec.size());
-
         if (displs.size() == 2)
         {
             displs.back() = (displs.back() - lasting) / 2;
             displs.push_back(fullVec.size());
         }
 
+        if (!std::count(displs.begin(), displs.end(), middlePointIfOdd))
+        {
+            displs.back() = middlePointIfOdd;
+            displs.push_back(fullVec.size());
+        }
+        
         while (displs.size() > 2)
         {
 // measurements part
-#ifdef debug
+#ifdef printWorkloads
             std::cout << "Final merging: ";
             totalTime += MPI_Wtime() - initTime;
             std::cout << "From " << displs[0] << " to " << displs[2] << " middle-point: " << displs[1]
