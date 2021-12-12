@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
     /**
      * This variable is used in the case of an odd number of chunk to merge. 
      * In some cases, it is necessary that the last chunk is left at the main process during the final merge **/
-    int middlePointIfOdd; 
+    int middlePointIfOdd=0; 
     if (rank == 0)
     {
         for (int i = 1; i < displs.size(); i++)
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
              * how many elements each process must go through. **/
             displs.push_back(fullVec.size());
 
-        if((displs.back() - displs.at(displs.size()-2)) < (displs[1]-displs[0]))
+        if((displs.size()>2) && (displs.back() - displs.at(displs.size()-2)) < (displs[1]-displs[0]))
             middlePointIfOdd = displs.at(displs.size()-2);
     }
 
@@ -269,10 +269,11 @@ int main(int argc, char *argv[])
         default:
             break;
         }
-
+#ifdef printWorkloads
         std::cout << std::endl
                   << "Global vector check returned " << result << std::endl;
-        std::cout << "Total time for the algorithm: " << totalTime * 1000000 << " microsecs" << std::endl;
+#endif
+        std::cout << "Total time for the algorithm: " << totalTime*1000<< " millisecs" << std::endl;
     }
 
     MPI_Finalize();
