@@ -1,11 +1,14 @@
 import subprocess
+import numpy 
 
 veclen= [729, 997, 1024]
 numberOfProcesses = [2, 3, 5]
 
 results = []
-testsToRun= 5
+testsToRun= 10
 avg=0
+
+subprocess.run('mpicxx parallelMergeSort.cpp helpers.cpp -o mpi_mergesort', shell=True)
 
 for np in numberOfProcesses:
   for vl in veclen:
@@ -18,6 +21,10 @@ for np in numberOfProcesses:
         avg +=tm
       except:
         i -= 1 
-    results.append([np, vl, (avg/testsToRun)])
+    results.append([np, vl, round((avg/testsToRun), 3)])
 
-print(results)
+results = numpy.array(results)
+
+for el in results:
+  dspl = 'Using ' + str(int(el[0]))+' processes with an array of ' +  str(int(el[1])) +' it took on average '+ str(el[2])+' millisecs \n'
+  print(dspl)
