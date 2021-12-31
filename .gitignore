@@ -3,3 +3,6 @@ MPI_challenge/mpi_sort
 MPI_challenge/seq_mergesort
 OpenMp_Scan_challenge/scan
 .vscode/*
+OpenMp_Scan_challenge/r_scan
+OpenMp_Scan_challenge/parallel_scan
+OpenMp_Scan_challenge/serial_scan
