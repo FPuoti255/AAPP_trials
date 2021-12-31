@@ -6,49 +6,52 @@
 
 #ifdef _OPENMP
 #include <omp.h>
+#define NT 4
 #endif
 
-#define NT 4
-
-unsigned int rows;
-unsigned int cols;
-unsigned int **tree;
 bool check = 1;
 
-void scan(unsigned int *in, unsigned int *out, unsigned int size)
+void scan(unsigned int *in, unsigned int *out, unsigned int vecsize)
 {
 
-    for (unsigned int i = 0; i < rows; i++)
+    /*
+     * UP-SWEEP PHASE (reduction)
+     * --------------------------
+     * The first for loop sets the number of repetition of single stage (of the upsweep phase) to log_2(vecsize) times.
+     *      Obviously, there should be a master thread which actually counts the number of iterations. The single stage is parallelized.
+     *
+     * The second for loop actually performs the single stage
+     * 
+     * level means at which level of the tree we are in the stage
+     *
+     */
+    for (int level = 1; level < vecsize; level <<= 1)
     {
-        tree[i] = (unsigned int *)malloc((size / (unsigned int)pow(2.0, i)) * sizeof(unsigned int));
-    }
-
-    tree[0] = out;
-
-    // UP-SWEEP PHASE
-    for (unsigned int r = 1; r < rows; r++)
-    {
-#pragma omp parallel for schedule(static) num_threads(NT)
-        for (unsigned int c = 0; c < (size / (unsigned int)pow(2.0, r)); c++)
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < vecsize; i += 2 * level)
         {
-            tree[r][c] = tree[r - 1][2 * c] + tree[r - 1][2 * c + 1];
+            out[2 * level + i - 1] += out[level + i - 1];
         }
     }
 
-    // DOWN-SWEEP PHASE
-    for (int r = rows - 2; r >= 0; r--)
+
+    /*
+     * DOWN-SWEEP PHASE
+     * ----------------
+     * Similarly as before, the main thread keeps the iteration counter and the single stage of the phase is parallelized.
+     * And, yet, this time the the a right shift is performed to divide by 2. We are going dow in the level of the 'tree'
+     * We can assume that the vecsize is always a power of 2
+     * 
+     * level means at which level of the tree we are in the stage
+     *
+     */
+    for (int level = vecsize / 2; level > 1; level >>= 1)
     {
-#pragma omp parallel for schedule(static) num_threads(NT)
-        for (unsigned int c = 1; c < (size / (unsigned int)pow(2.0, r)); c++)
+        int stage_stride = level / 2;
+#pragma omp parallel for schedule(static)
+        for(int i = level / 2; i < vecsize - level ; i += level)
         {
-            if (c % 2 != 0)
-            {
-                tree[r][c] = tree[r + 1][c / 2];
-            }
-            else
-            {
-                tree[r][c] += tree[r + 1][c / 2 - 1];
-            }
+            out[(level + i -1)] += out[(level + i - 1) - stage_stride];
         }
     }
 }
@@ -56,7 +59,7 @@ void scan(unsigned int *in, unsigned int *out, unsigned int size)
 void check_result(unsigned int *res, unsigned int size)
 {
 
-#pragma omp parallel for schedule(static) num_threads(NT)
+#pragma omp parallel for schedule(static)
     for (int ii = 0; ii < size; ii++)
     {
         if (res[ii] != ii * (ii + 1) / 2)
@@ -96,28 +99,29 @@ int main(int argc, char *argv[])
     }
 
     unsigned int vecSize = strtoumax(argv[1], NULL, 10);
-
     unsigned int initialVals[vecSize], finalVals[vecSize];
 
+#ifdef _OPENMP
+    omp_set_num_threads(NT);
+#endif
+
+    // vector initialization
+#pragma omp parallel for schedule(guided)
     for (int ii = 0; ii < vecSize; ii++)
     {
         initialVals[ii] = ii;
         finalVals[ii] = ii;
     }
 
-    rows = (unsigned int)log2(vecSize) + 1;
-    cols = vecSize;
-    tree = (unsigned int **)malloc(rows * sizeof(unsigned int *));
-
     scan(initialVals, finalVals, vecSize);
 
     check_result(finalVals, vecSize);
     printf("\nThe check returned: %d \n", check);
-
-    /*for (int ii = 0; ii < vecSize; ii++)
+/*
+    for (int ii = 0; ii < vecSize; ii++)
     {
         printf("%d ", finalVals[ii]);
-    }*/
-
+    }
+*/
     return 0;
 }
