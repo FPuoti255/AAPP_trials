@@ -3,59 +3,60 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #ifdef _OPENMP
 #include <omp.h>
 #define NT 4
 #endif
 
-
 bool check = 1;
-
 
 template <typename T, typename C>
 void scan(
-     const T* in, // source data
-     T* out,      // output data
-     int size,    // size of source, output data sets
-     C combine   // combine expression
- )
- {
+    const T *in, // source data
+    T *out,      // output data
+    int size,    // size of source, output data sets
+    C combine    // combine expression
+)
+{
 
-     // upsweep (reduction)
-     for (int stride = 1; stride < size; stride <<= 1) {
-         #pragma omp parallel for schedule(guided)
-         for (int i = 0; i < size; i += 2 * stride)
-             out[2 * stride + i - 1] =
-              combine(out[2 * stride + i - 1], out[stride + i - 1]);
-     }
+    // upsweep (reduction)
+    for (int stride = 1; stride < size; stride <<= 1)
+    {
+#pragma omp parallel for schedule(guided)
+        for (int i = 0; i < size; i += 2 * stride)
+            out[2 * stride + i - 1] =
+                combine(out[2 * stride + i - 1], out[stride + i - 1]);
+    }
 
-     // clear last element
-     T last = out[size - 1];
-     out[size - 1] = T(0);
+    // clear last element
+    T last = out[size - 1];
+    out[size - 1] = T(0);
 
-     // downsweep
-     for (int stride = size / 2; stride > 0; stride >>= 1) {
-         #pragma omp parallel
-         {
-             #pragma omp for schedule(guided)
-             for (int i = 0; i < size; i += 2 * stride) {
-                 T temp = out[stride + i - 1];
-                 out[stride + i - 1] = out[2 * stride + i - 1];
-                 out[2 * stride + i - 1] =
-                  combine(temp, out[2 * stride + i - 1]);
-             }
-         }
-     }
+    // downsweep
+    for (int stride = size / 2; stride > 0; stride >>= 1)
+    {
+#pragma omp parallel
+        {
+#pragma omp for schedule(guided)
+            for (int i = 0; i < size; i += 2 * stride)
+            {
+                T temp = out[stride + i - 1];
+                out[stride + i - 1] = out[2 * stride + i - 1];
+                out[2 * stride + i - 1] =
+                    combine(temp, out[2 * stride + i - 1]);
+            }
+        }
+    }
 
-     // shift left for inclusive scan and add last
-     for (int i = 0; i < size - 1; i++)
-         out[i] = out[i + 1];
-     out[size - 1] = last;
+    // shift left for inclusive scan and add last
+    for (int i = 0; i < size - 1; i++)
+        out[i] = out[i + 1];
+    out[size - 1] = last;
+}
 
- }
-
- void check_result(unsigned int *res, unsigned int size)
+void check_result(unsigned int *res, unsigned int size)
 {
 
 #pragma omp parallel for schedule(static)
@@ -66,7 +67,7 @@ void scan(
     }
 }
 
- int main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 
     if (argc != 2)
@@ -89,16 +90,16 @@ void scan(
         finalVals[ii] = ii;
     }
 
-    auto combine_function = [](int a, int b) {return a+b;}; 
+    clock_t tic, tac;
+    tic = clock();
+
+    auto combine_function = [](int a, int b)
+    { return a + b; };
     scan(initialVals, finalVals, vecSize, combine_function);
+    tac = clock();
 
     check_result(finalVals, vecSize);
-    printf("\nThe check returned: %d \n", check);
-/*
-    for (int ii = 0; ii < vecSize; ii++)
-    {
-        printf("%d ", finalVals[ii]);
-    }
-*/
+    printf("The check returned: %d \n", check);
+    printf("Total elapsed time = %.5f milliseconds;\n", (double)(tac - tic) * 1000.0 / CLOCKS_PER_SEC);
     return 0;
 }

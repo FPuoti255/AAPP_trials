@@ -135,23 +135,26 @@ int main(int argc, char *argv[])
         finalVals[ii] = ii;
     }
 
+#ifdef _OPENMP
+    double start, end;
+    start = omp_get_wtime();
+    parallel_scan(finalVals, vecSize);
+    end = omp_get_wtime();
+#else
     clock_t tic, tac;
     tic = clock();
-#ifdef _OPENMP
-    parallel_scan(finalVals, vecSize);
-#else
     serial_scan(finalVals, vecSize);
-#endif
     tac = clock();
+#endif
 
     check_result(finalVals, vecSize);
     printf("The check returned: %d \n", check);
-
+ 
+ #ifdef _OPENMP
+    printf("Total elapsed time = %.5f milliseconds;\n", (end - start) * 1000.0);
+#else
     printf("Total elapsed time = %.5f milliseconds;\n", (double)(tac - tic) * 1000.0 / CLOCKS_PER_SEC);
+#endif
 
-    for (int ii = 0; ii < vecSize && check == 0; ii++)
-    {
-        printf("%d ", finalVals[ii]);
-    }
     return 0;
 }
