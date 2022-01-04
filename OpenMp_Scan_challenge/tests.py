@@ -1,5 +1,4 @@
 import subprocess
-import numpy
 
 subprocess.run('gcc -fopenmp scan.c -o parallel_scan -lm', shell=True)
 subprocess.run('gcc scan.c -o serial_scan -lm', shell=True)

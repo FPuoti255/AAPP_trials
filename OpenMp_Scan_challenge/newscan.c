@@ -5,10 +5,6 @@
 #include <math.h>
 #include <time.h>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
 bool check = 1;
 
 void parallel_scan(unsigned int *out, unsigned int vecsize)
@@ -28,7 +24,6 @@ void parallel_scan(unsigned int *out, unsigned int vecsize)
     for (int level = 1; level < vecsize; level <<= 1)
     {
         int i = 0;
-#pragma omp parallel for schedule(runtime) private(i) shared(out)
         for (i = 0; i < vecsize; i += 2 * level)
         {
             out[2 * level + i - 1] += out[level + i - 1];
@@ -49,7 +44,6 @@ void parallel_scan(unsigned int *out, unsigned int vecsize)
     {
         int stage_stride = level / 2;
         int i = 0;
-#pragma omp parallel for schedule(runtime) private(i) shared(out, stage_stride)
         for (i = level / 2; i < vecsize - level; i += level)
         {
             out[(level + i - 1)] += out[(level + i - 1) - stage_stride];
@@ -57,18 +51,8 @@ void parallel_scan(unsigned int *out, unsigned int vecsize)
     }
 }
 
-void serial_scan(unsigned int *out, unsigned int vecsize)
-{
-    for (int i = 1; i < vecsize; i++)
-    {
-        out[i] += out[i - 1];
-    }
-}
-
 void check_result(unsigned int *res, unsigned int size)
 {
-
-#pragma omp parallel for schedule(runtime)
     for (int ii = 0; ii < size; ii++)
     {
         if (res[ii] != ii * (ii + 1) / 2)
@@ -119,43 +103,25 @@ int main(int argc, char *argv[])
 
     unsigned int vecSize = strtoumax(argv[1], NULL, 10);
 
-#ifdef _OPENMP
-    if (omp_get_max_threads() > vecSize || omp_get_max_threads() == 0)
-    {
-        printf("Wrong number of threads! ");
-        return 0;
-    }
-#endif
-
     unsigned int finalVals[vecSize];
 
-// vector initialization
-#pragma omp parallel for schedule(runtime)
+
     for (int ii = 0; ii < vecSize; ii++)
     {
         finalVals[ii] = ii;
     }
 
-#ifdef _OPENMP
-    double start, end;
-    start = omp_get_wtime();
-    parallel_scan(finalVals, vecSize);
-    end = omp_get_wtime();
-#else
     clock_t tic, tac;
     tic = clock();
-    serial_scan(finalVals, vecSize);
+    parallel_scan(finalVals, vecSize);
     tac = clock();
-#endif
+
 
     check_result(finalVals, vecSize);
     printf("The check returned: %d \n", check);
- 
- #ifdef _OPENMP
-    printf("Total elapsed time = %.5f milliseconds;\n", (end - start) * 1000.0);
-#else
+
     printf("Total elapsed time = %.5f milliseconds;\n", (double)(tac - tic) * 1000.0 / (double)CLOCKS_PER_SEC);
-#endif
+
 
     return 0;
 }
